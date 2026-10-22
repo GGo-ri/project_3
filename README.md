@@ -5,6 +5,7 @@ TurtleBot3가 순찰하다가 낙상이 의심되는 사람을 발견하면 서�
 - 서버: FastAPI + SQLite (`backend/app`)
 - 대시보드: HTML/JS, 서버가 `/`에서 같이 서빙 (`backend/static`)
 - 테스트 도구: 더미 데이터, 가짜 로봇 (`backend/scripts`)
+- ROS 연동: 로봇 위치 전송 노드, 서버 호출 클라이언트 (`ros/fall_patrol_bridge`) → [ros/README.md](ros/README.md)
 - 설계 문서: [GUIDE.md](GUIDE.md)
 
 ## 리눅스(Ubuntu)에서 실행
@@ -69,4 +70,4 @@ rm -rf backend/data
 | 무시 구역 | `backend/app/config.py` | 반경, 유지 시간 |
 | 로봇 노드 | ROS 쪽 | 서버 주소는 `http://127.0.0.1:8000` |
 
-로봇이 호출하는 API와 순서는 [GUIDE.md](GUIDE.md)의 "감지 흐름"과 `backend/scripts/fake_robot.py`를 참고한다.
+로봇 쪽은 `ros/fall_patrol_bridge`를 쓴다. 위치 전송은 `status_bridge` 노드, 감지 이벤트 기록은 `ServerClient`로 한다. 자세한 사용법은 [ros/README.md](ros/README.md), API 순서는 [GUIDE.md](GUIDE.md)의 "감지 흐름" 참고.

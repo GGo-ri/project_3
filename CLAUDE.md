@@ -28,6 +28,9 @@ backend/
   maps/           대시보드용 지도 (map.png, map.yaml) + 가짜 로봇 경로 (patrol.json)
   scripts/        seed(더미 데이터), fake_robot(가짜 로봇), convert_map(SLAM 지도 변환), map_cleaner 등
   data/           app.db + snapshots/ (git 제외, 서버가 자동 생성)
+ros/
+  fall_patrol_bridge/   ROS 2 패키지: status_bridge 노드(TF map→base_footprint를 PUT /status로 전송),
+                        ServerClient(주행·인식 노드가 import해서 서버 호출). 사용법은 ros/README.md
 ```
 
 ## 실행 (리눅스)
@@ -70,9 +73,14 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt   # 처음 �
 5. `backend/static/app.js`의 `CONFIG.videoTopic`을 `/image_raw`로 바꾼다
 6. 와이파이로 끊기면 압축 영상(`type=ros_compressed`) 사용을 검토한다
 
+## 실제 로봇에 status_bridge 붙이기
+
+`ros/README.md` 순서대로 빌드하고, 로봇 bringup + 위치 추정(AMCL)이 떠 있는 상태에서 `ros2 run fall_patrol_bridge status_bridge`. 대시보드 지도에서 로봇이 움직이면 성공. 시뮬레이션(Gazebo turtlebot3_world)에서는 2026-10-22에 확인함. 주행 노드는 `/fall_patrol/state`(String)로 상태를 발행하면 된다.
+
 ## 남은 일
 
 - 이벤트 좌표를 어떻게 구할지 로봇 파트와 합의 (지금은 nullable)
+- 스피커(Adafruit USB 미니 스피커)와 마이크(Coms BT042 USB) 구매 예정. 음성 안내 + Whisper(PC에서 실행) 키워드 판단은 로봇·인식 쪽, 서버는 음성 응답 텍스트와 녹음 파일 저장·표시 담당
 - 사진 저장 후 에러가 나면 파일만 남는 문제: 에러 시 저장한 파일을 지우도록 처리
 - 다른 파트에 넘길 API 명세 정리
 - 나중에: MCU(LED·부저) 연동, 텔레그램 알림
