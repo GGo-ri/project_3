@@ -1,198 +1,180 @@
-# 주행 연동 API 명세
+# 주행 연동 가이드
 
-낙상 의심 감지 서버(대시보드)와 주행 노드를 연결하기 위한 문서다. **주행 노드가 서버로 보낸다.** 서버가 주행 노드에 먼저 보내는 것은 없고, "무시 구역인가?"에 대한 답만 돌려준다.
+낙상 의심 감지 대시보드에 로봇 위치와 사람 감지 결과가 나오게 하려면 주행 노드에서 아래 두 가지만 하면 된다. 서버·대시보드·ROS 노드가 모두 **같은 리눅스 PC**에서 돈다는 전제다.
 
+| 할 일 | 방법 | 대시보드에 나오는 것 |
+|---|---|---|
+| 1. 로봇 위치·상태 보내기 | `status_bridge` 노드 실행 + 상태 토픽 발행 | 지도 위 로봇 위치·시야각, 로봇 상태창 |
+| 2. 사람 감지 결과 보내기 | `ServerClient` 함수 호출 | 알림 배너, 이벤트 기록, 사진 3장 |
+
+둘 다 `ros/fall_patrol_bridge` 패키지에 들어 있다.
+
+## 0. 준비 (처음 한 번)
+
+```bash
+mkdir -p ~/fall_patrol_ws/src
+cp -r ~/project_3/ros/fall_patrol_bridge ~/fall_patrol_ws/src/
+cd ~/fall_patrol_ws && colcon build --packages-select fall_patrol_bridge
+source ~/fall_patrol_ws/install/setup.bash
 ```
-주행 노드 ──(위치·상태, 감지 이벤트, 사진, 판단 결과)──▶ 서버 ──▶ 대시보드
-         ◀──────────(무시 구역인지 여부)───────────────
-```
 
-## 1. 공통 규칙
+서버는 [../README.md](../README.md)대로 켜 둔다. 서버가 꺼져 있어도 주행 노드가 멈추지는 않는다.
 
-| 항목 | 규칙 |
-|---|---|
-| 서버 주소 | `http://127.0.0.1:8000` (서버와 주행 노드가 같은 PC) |
-| 좌표 | **map 좌표계, 미터**. AMCL이 쓰는 지도와 대시보드 지도가 같은 지도여야 한다 |
-| 방향(yaw) | 라디안, map 좌표계 기준 (x축 0, 반시계 +) |
-| 시간 | 보내지 않는다. 서버가 받은 시각을 기록한다 |
-| 사진 | JPEG 또는 PNG. 다른 형식은 400 에러 |
-| 실패 | 서버가 꺼져 있어도 순찰은 멈추지 않게 예외 처리한다 |
+## 1. 로봇 위치·상태
 
-## 2. 연동 방법 두 가지
-
-**A. ROS 패키지 사용 (추천)** — `ros/fall_patrol_bridge`
-
-- 위치·상태: `status_bridge` 노드를 켜고 토픽만 발행
-- 감지 이벤트: `ServerClient` 클래스 import해서 함수 호출
-- 빌드와 예시 코드: [ros/README.md](../ros/README.md)
-
-**B. HTTP 직접 호출** — 다른 언어나 다른 구조를 쓸 때. 아래 3, 4장의 명세대로 보낸다.
-
-브라우저에서 `http://127.0.0.1:8000/docs`를 열면 모든 API를 직접 눌러서 시험할 수 있다.
-
-## 3. 로봇 위치·상태
-
-대시보드 지도의 로봇 위치, 시야각, 로봇 상태창, 실시간 로그에 쓰인다.
-
-### A 방식 (ROS)
+### 위치: status_bridge 실행
 
 ```bash
 ros2 run fall_patrol_bridge status_bridge
 ```
 
-- 위치·방향은 TF `map → base_footprint`에서 자동으로 읽어서 0.2초마다 보낸다 (AMCL이 켜져 있어야 함)
-- 주행 노드는 **상태가 바뀔 때** 아래 토픽만 발행하면 된다
+- TF `map → base_footprint`에서 로봇 위치와 방향을 읽어 0.2초마다 서버로 보낸다
+- **위치 추정(AMCL)이 켜져 있어야 한다.** 꺼져 있으면 "map 좌표의 로봇 위치를 아직 모름" 경고가 나온다
+- AMCL이 쓰는 지도와 대시보드 지도가 **같은 지도**여야 로봇이 제자리에 표시된다
+
+### 상태: 바뀔 때 토픽 발행
 
 | 토픽 | 타입 | 값 |
 |---|---|---|
 | `/fall_patrol/state` | `std_msgs/String` | 아래 상태 중 하나 |
 | `/fall_patrol/waypoint` | `std_msgs/Int32` | 지금 가는 순찰 지점 번호 (선택) |
 
-### B 방식 (HTTP)
-
-`PUT /status` — 0.2초(5Hz) 정도로 계속 보낸다. 5초 넘게 안 오면 대시보드에 "로봇 응답 없음"이 뜬다.
-
-```json
-{ "state": "patrol", "x": 1.25, "y": -0.40, "yaw": 1.57, "current_waypoint": 3 }
-```
-
-| 필드 | 타입 | 필수 | 설명 |
-|---|---|---|---|
-| `state` | string | O | 아래 상태 중 하나 |
-| `x`, `y` | float | | map 좌표 (m) |
-| `yaw` | float | | 방향 (rad) |
-| `current_waypoint` | int | | 순찰 지점 번호 |
-
-### 로봇 상태 값
-
-| 값 | 대시보드 표시 | 언제 |
+| 값 | 대시보드 표시 | 언제 발행 |
 |---|---|---|
 | `idle` | 대기 | 순찰 시작 전, 정지 |
-| `patrol` | 순찰 중 | 순찰 경로 이동 중 |
+| `patrol` | 순찰 중 | 순찰 경로로 이동할 때 |
 | `suspect` | 의심 감지 | 누운 사람을 처음 발견한 순간 |
-| `approach` | 접근 중 | 사람에게 다가가는 중 |
-| `observe` | 관찰 중 | 멈춰서 움직임을 지켜보는 중 |
+| `approach` | 접근 중 | 사람에게 다가가기 시작할 때 |
+| `observe` | 관찰 중 | 멈춰서 움직임을 지켜보기 시작할 때 |
 | `alert` | 알림 | 낙상 의심으로 판단한 직후 (잠깐) |
 
-## 4. 사람 감지 흐름
+다른 값을 보내면 무시된다. 발행하지 않으면 계속 "순찰 중"으로 보인다.
 
-**순서가 중요하다.** 사진은 3장: ① 처음 발견했을 때(멀리서), ② 접근해서 멈췄을 때, ③ 판단을 내릴 때.
+```python
+from std_msgs.msg import String
+self.state_pub = self.create_publisher(String, "/fall_patrol/state", 10)
+
+def set_state(self, state):
+    self.state_pub.publish(String(data=state))
+```
+
+## 2. 사람 감지 결과
+
+### 흐름
+
+사진은 3장이다: ① 처음 발견한 순간(멀리서), ② 접근해서 멈춘 순간, ③ 판단을 내린 순간.
 
 ```
-1. 누운 사람 발견          상태 suspect, 사진 ① 찍어서 보관
-2. 무시 구역 확인           GET  /ignore-zones/check
-     ignored: true  →      사진 ① 버리고 상태 patrol, 순찰 계속 (서버에 아무것도 저장 안 됨)
-     ignored: false →      상태 approach, 접근
-3. 도착해서 멈춤            상태 observe, 사진 ②
-                           POST /events (사진 ①②)        ← 이 순간부터 이 위치는 무시 구역
+1. 누운 사람 발견      상태 suspect, 사진 ① 찍어서 들고 있기
+2. 무시 구역인가?      client.is_ignored(x, y)
+     True  →          사진 ① 버리고 상태 patrol, 순찰 계속
+     False →          상태 approach, 접근
+3. 도착해서 멈춤       상태 observe, 사진 ②
+                      event_id = client.create_event(...)    ← 이 순간부터 이 위치는 무시 구역
 4. 관찰 (15~30초)
-5. 판단                    사진 ③
-                           POST /events/{id}/snapshots (사진 ③)
-                           PATCH /events/{id} (결과)
-                           결과가 confirmed면 상태 alert
-6. 순찰 재개                상태 patrol
+5. 판단               사진 ③
+                      client.add_snapshot(event_id, "decision", ...)
+                      client.set_result(event_id, 결과)        결과가 confirmed면 상태 alert
+6. 순찰 재개           상태 patrol
 ```
 
-### 4-1. 무시 구역 확인 — `GET /ignore-zones/check?x=&y=`
+### ServerClient 함수
 
-```bash
-curl "http://127.0.0.1:8000/ignore-zones/check?x=1.20&y=-0.50"
-```
-```json
-{ "ignored": false, "event_id": null }
+```python
+from fall_patrol_bridge.server_client import ServerClient, ServerError
+client = ServerClient()
 ```
 
-- `ignored: true`면 이미 처리 중인 위치다. 다가가지 않고 지나간다
-- 판정 기준 (서버가 계산): 요청 좌표에서 **1m 이내**에, 아래 이벤트가 하나라도 있으면 무시
-  - 낙상 의심·판단 불가·관찰 중·확인됨 상태이고 **10분 이내**
-  - 오탐이고 **3분 이내**
-  - 관리자가 "처리 완료"를 누른 이벤트는 제외 (다시 감지해야 하므로)
-- **서버가 응답하지 않으면 `ignored: false`로 보고 접근한다.** 놓치는 것보다 한 번 더 보는 게 안전하다
-
-### 4-2. 이벤트 생성 — `POST /events` (multipart/form-data)
-
-| 필드 | 타입 | 필수 | 설명 |
+| 함수 | 언제 | 인자 | 돌려주는 값 |
 |---|---|---|---|
-| `x`, `y` | float | 권장 | 사건 위치 (map, m). 없으면 무시 구역 판정에 안 쓰인다 |
-| `confidence` | float | | 인식 신뢰도 0~1 |
-| `detected_snapshot` | 파일 | 권장 | 사진 ① |
-| `observing_snapshot` | 파일 | 권장 | 사진 ② |
+| `is_ignored(x, y)` | 2. 다가가기 전 | 사건 위치 | `True`면 이미 처리 중인 위치 → 다가가지 않음 |
+| `create_event(x, y, confidence, detected_image, observing_image)` | 3. 멈췄을 때 | 위치, 인식 신뢰도(0~1), 사진 ①②| 이벤트 번호 `event_id` (저장해 둘 것) |
+| `add_snapshot(event_id, "decision", image)` | 5. 판단할 때 | 이벤트 번호, 사진 ③ | 없음 |
+| `set_result(event_id, status)` | 5. 판단할 때 | 이벤트 번호, 결과 | 없음 |
 
-```bash
-curl -X POST http://127.0.0.1:8000/events \
-  -F x=1.20 -F y=-0.50 -F confidence=0.82 \
-  -F "detected_snapshot=@detected.jpg;type=image/jpeg" \
-  -F "observing_snapshot=@observing.jpg;type=image/jpeg"
-```
+- 좌표 `x, y`는 **map 좌표계, 미터**
+- 사진은 `(바이트, "image/jpeg")` 형태 (아래 `capture()` 참고)
+- `is_ignored`는 서버가 응답하지 않으면 `False`를 돌려준다. 놓치는 것보다 한 번 더 보는 게 안전하다
+- 나머지 함수는 서버 오류 시 `ServerError`를 던진다. 순찰이 멈추지 않게 `try/except`로 감싼다
 
-응답(201)의 **`id`를 저장해 둔다.** 이후 호출에 쓴다.
+### 판단 결과 값
 
-```json
-{ "id": 12, "status": "observing", "x": 1.2, "y": -0.5, "confidence": 0.82, "snapshot_url": "/snapshots/....jpg", ... }
-```
-
-### 4-3. 사진 ③ 추가 — `POST /events/{id}/snapshots` (multipart/form-data)
-
-| 필드 | 값 |
-|---|---|
-| `kind` | `decision` (① `detected`, ② `observing`도 나중에 따로 보낼 수 있음) |
-| `snapshot` | 사진 파일 |
-
-```bash
-curl -X POST http://127.0.0.1:8000/events/12/snapshots \
-  -F kind=decision -F "snapshot=@decision.jpg;type=image/jpeg"
-```
-
-### 4-4. 판단 결과 — `PATCH /events/{id}` (JSON)
-
-```bash
-curl -X PATCH http://127.0.0.1:8000/events/12 \
-  -H "Content-Type: application/json" -d '{"status": "confirmed"}'
-```
-
-| 결과 값 | 뜻 | 대시보드 |
+| 값 | 뜻 | 대시보드 |
 |---|---|---|
 | `confirmed` | 낙상 의심 (관찰 시간 동안 움직임 없음) | 빨간 알림 배너 |
 | `uncertain` | 판단 불가 (가려짐, 일부만 보임, 애매함) | 노란 알림 배너, 관리자가 판단 |
 | `false_alarm` | 오탐 (일어남, 걸어감, 사람이 아님) | 알림 없음 |
 
-`acknowledged`(확인), `resolved`(처리 완료)는 관리자가 대시보드에서 누르는 값이다. 주행 노드는 보내지 않는다.
+"확인", "처리 완료"는 관리자가 대시보드에서 누른다. 주행 노드는 위 세 가지만 보낸다.
 
-### 4-5. 같은 흐름을 ServerClient로 (A 방식)
+### 무시 구역 기준 (서버가 계산)
+
+이미 기록된 이벤트에서 **1m 이내**이고 아래에 해당하면 `is_ignored`가 `True`다.
+
+- 낙상 의심·판단 불가·관찰 중·확인됨 상태이고 **10분 이내**
+- 오탐이고 **3분 이내**
+- 관리자가 "처리 완료"를 누른 이벤트는 제외 (같은 자리에서 다시 감지해야 하므로)
+
+### 사진 찍기
+
+"사진을 찍는다"는 건 카메라 토픽에서 **그 순간의 최신 화면 한 장을 꺼내는 것**이다.
 
 ```python
-import cv2
-from fall_patrol_bridge.server_client import ServerClient, ServerError
+from sensor_msgs.msg import CompressedImage
+import cv2, numpy as np
 
-client = ServerClient()
+self.latest = None
+self.create_subscription(CompressedImage, "/image_raw/compressed", self.on_image, 10)
 
-def jpg(frame):
+def on_image(self, msg):
+    self.latest = msg                       # 계속 최신 화면으로 덮어씀
+
+def capture(self):
+    frame = cv2.imdecode(np.frombuffer(self.latest.data, np.uint8), cv2.IMREAD_COLOR)
     return cv2.imencode(".jpg", frame)[1].tobytes(), "image/jpeg"
-
-detected = jpg(frame)                          # 1. 발견 (사진 ①)
-if client.is_ignored(x, y):                    # 2. 무시 구역 (서버 꺼짐 → False)
-    return
-try:
-    event_id = client.create_event(x, y, confidence, detected, jpg(arrived_frame))  # 3.
-    ...                                        # 4. 관찰
-    client.add_snapshot(event_id, "decision", jpg(best_frame))                      # 5.
-    client.set_result(event_id, "confirmed")
-except ServerError as error:
-    node.get_logger().error(f"서버 기록 실패: {error}")  # 순찰은 계속
 ```
 
-## 5. 같이 정해야 할 것
+인식 노드가 박스·스켈레톤을 그린 화면을 토픽으로 발행하면, 구독 토픽만 그걸로 바꾸면 된다. 관리자가 판단하기 훨씬 쉽다.
+
+### 전체 예시
+
+```python
+detected = self.capture()                                 # 1. 발견 (사진 ①)
+self.set_state("suspect")
+if self.client.is_ignored(x, y):                          # 2. 무시 구역
+    self.set_state("patrol")
+    return
+self.set_state("approach")
+...                                                       # 접근해서 멈춤
+self.set_state("observe")
+try:
+    event_id = self.client.create_event(x, y, confidence, detected, self.capture())   # 3.
+    ...                                                   # 4. 관찰
+    self.client.add_snapshot(event_id, "decision", self.capture())                    # 5.
+    self.client.set_result(event_id, result)
+    if result == "confirmed":
+        self.set_state("alert")
+except ServerError as error:
+    self.get_logger().error(f"서버 기록 실패: {error}")    # 순찰은 계속
+self.set_state("patrol")                                  # 6. 순찰 재개
+```
+
+## 3. 같이 정해야 할 것
 
 | 항목 | 선택지 | 제안 |
 |---|---|---|
-| 이벤트 좌표 `x, y` | 사람 위치를 계산 / 로봇이 멈춘 위치로 대신 | 처음엔 **로봇 위치**로 시작 (무시 구역 반경이 1m라 충분) |
+| 사건 좌표 `x, y` | 사람 위치를 계산 / 로봇이 멈춘 위치로 대신 | 처음엔 **로봇 위치**로 시작 (무시 구역 반경 1m라 충분) |
 | 관찰 시간 | 몇 초 동안 안 움직이면 낙상 의심인지 | 15~30초 |
-| 지도 | 새로 매핑하면 `.yaml` + `.pgm`을 넘겨준다 | 대시보드 지도도 같은 지도로 교체 (`convert_map --clean`) |
-| 사진 형식 | JPEG / PNG | JPEG (용량 작음) |
+| 접근 거리 | 사람 앞 몇 m에서 멈출지 | 1~1.5m (카메라에 몸 전체가 들어오는 거리) |
+| 지도 | 새로 매핑하면 `.yaml` + `.pgm` 공유 | 대시보드 지도도 같은 지도로 교체 |
+| 사진 화면 | 원본 카메라 / 인식이 그린 화면 | 인식이 그린 화면 |
 
-## 6. 혼자 테스트하는 방법
+## 4. 잘 되는지 확인
 
-1. 서버 실행: [../README.md](../README.md)
-2. `http://127.0.0.1:8000/docs`에서 API를 하나씩 눌러보거나 위 curl 예시를 실행
-3. `http://127.0.0.1:8000` 대시보드에서 배너, 지도, 로그가 바뀌는지 확인
-4. 전체 흐름 예시는 `backend/scripts/fake_robot.py` (실제 로봇 대신 이 순서대로 서버를 부르는 스크립트)
+브라우저에서 `http://localhost:8000` 대시보드를 열어 둔다.
+
+- `status_bridge`를 켜면 → 지도에 로봇이 나타나고, 움직이면 따라온다
+- 상태 토픽을 발행하면 → 로봇 상태창과 실시간 로그가 바뀐다
+- 사람 감지 흐름을 돌리면 → 알림 배너가 뜨고, 이벤트를 누르면 사진 3장과 처리 이력이 보인다
+
+`ServerClient`는 내부적으로 같은 PC의 서버(`127.0.0.1:8000`)와 통신한다. 주행 노드에서 신경 쓸 필요는 없다.

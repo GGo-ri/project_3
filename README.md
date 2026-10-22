@@ -6,7 +6,7 @@ TurtleBot3가 순찰하다가 낙상이 의심되는 사람을 발견하면 서�
 - 대시보드: HTML/JS, 서버가 `/`에서 같이 서빙 (`backend/static`)
 - 테스트 도구: 더미 데이터, 가짜 로봇 (`backend/scripts`)
 - ROS 연동: 로봇 위치 전송 노드, 서버 호출 클라이언트 (`ros/fall_patrol_bridge`) → [ros/README.md](ros/README.md)
-- **주행 연동 API 명세: [docs/API.md](docs/API.md)** ← 주행 담당은 이것부터 읽는다
+- **주행 연동 가이드: [docs/API.md](docs/API.md)** ← 주행 담당은 이것부터 읽는다
 - 설계 문서: [GUIDE.md](GUIDE.md)
 
 ## 리눅스(Ubuntu)에서 실행
