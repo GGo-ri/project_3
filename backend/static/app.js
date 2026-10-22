@@ -3,7 +3,8 @@ const CONFIG = {
   eventsIntervalMs: 2500,
   robotTimeoutMs: 5000,
   videoPort: 8080,
-  videoTopic: "/camera/image_raw",
+  videoTopic: "/image_raw",
+  videoType: "ros_compressed",
   cameraFovDeg: 62,
   viewRangeM: 1.5,
   robotRadiusM: 0.12,
@@ -631,7 +632,7 @@ function setLive(live) {
 function startVideo() {
   const video = $("#video");
   const host = `${location.hostname}:${CONFIG.videoPort}`;
-  const url = `${location.protocol}//${host}/stream?topic=${encodeURIComponent(CONFIG.videoTopic)}`;
+  const url = `${location.protocol}//${host}/stream?topic=${CONFIG.videoTopic}&type=${CONFIG.videoType}`;
   $("#camera-topic").textContent = CONFIG.videoTopic;
   $("#video-hint").textContent = host;
   const connect = () => {

@@ -66,6 +66,7 @@ rm -rf backend/data
 | 지도 회전 | `backend/static/app.js` `CONFIG.mapRotation` | 지도를 눕혀서 보여줄지 (90 또는 0) |
 | 영상 토픽 | `backend/static/app.js` `CONFIG.videoTopic` | 실제 카메라 토픽 또는 YOLO 결과 이미지 토픽 |
 | 영상 포트 | `backend/static/app.js` `CONFIG.videoPort` | web_video_server 포트 (기본 8080) |
+| 영상 타입 | `backend/static/app.js` `CONFIG.videoType` | `ros_compressed`(와이파이 권장) 또는 `mjpeg`(원본 토픽, 대역폭 큼) |
 | 카메라 화각 | `backend/static/app.js` `CONFIG.cameraFovDeg` | 실제 카메라 화각 |
 | 무시 구역 | `backend/app/config.py` | 반경, 유지 시간 |
 | 로봇 노드 | ROS 쪽 | 서버 주소는 `http://127.0.0.1:8000` |

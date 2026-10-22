@@ -64,16 +64,14 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt   # 처음 �
 - 상태값 enum은 `app/models.py` 한 곳에서만 정의한다
 - `create_all`만 쓴다. 모델을 바꾸면 `backend/data`를 지우고 다시 만든다
 
-## 지금 할 일: 실제 로봇 카메라 연동
+## 실제 로봇 카메라 연동 (완료, 2026-10-22)
 
-1. 로봇에서 `turtlebot3_bringup`과 카메라(`v4l2_camera`)를 띄운다. 이 경우 토픽은 `/camera/image_raw`가 아니라 **`/image_raw`**다
-2. PC에서 `ros2 topic hz /image_raw`로 영상이 들어오는지 확인 (`ROS_DOMAIN_ID`가 로봇과 같아야 함)
-3. `sudo apt install -y ros-humble-web-video-server` 후 `ros2 run web_video_server web_video_server`
-4. `http://localhost:8080`에서 토픽 영상이 단독으로 나오는지 확인
-5. `backend/static/app.js`의 `CONFIG.videoTopic`을 `/image_raw`로 바꾼다
-6. 와이파이로 끊기면 압축 영상(`type=ros_compressed`) 사용을 검토한다
+- 로봇: `v4l2_camera_node` + `turtlebot3_bringup`, 토픽은 **`/image_raw`**
+- PC: `web_video_server` (8080). 대시보드 `CONFIG.videoTopic = "/image_raw"`, `CONFIG.videoType = "ros_compressed"`
+- `localhost:8080`에서 원본(`/image_raw`) 스트림을 직접 열지 않는다. 와이파이가 꽉 차서 영상이 멈춘다
+- 실제 실행 명령, 로봇 주소, ROS_DOMAIN_ID(33)는 [실행방법.txt](실행방법.txt)
 
-## 실제 로봇에 status_bridge 붙이기
+## 지금 할 일: 실제 로봇에 status_bridge 붙이기
 
 `ros/README.md` 순서대로 빌드하고, 로봇 bringup + 위치 추정(AMCL)이 떠 있는 상태에서 `ros2 run fall_patrol_bridge status_bridge`. 대시보드 지도에서 로봇이 움직이면 성공. 시뮬레이션(Gazebo turtlebot3_world)에서는 2026-10-22에 확인함. 주행 노드는 `/fall_patrol/state`(String)로 상태를 발행하면 된다.
 
